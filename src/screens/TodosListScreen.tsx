@@ -117,8 +117,10 @@ const TodosListScreen = (): JSX.Element => {
   const [title, setTitle] = useState('');
   const [todos, dispatch] = useReducer(reducer, []);
   const [filter, setFilter] = useState<Filter>('all');
+  const [refreshing, setRefreshing] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ todo: Todo; index: number } | null>(null);
 
   // Load on mount
   useEffect(() => {
@@ -174,7 +176,23 @@ const TodosListScreen = (): JSX.Element => {
     setEditingTitle('');
   };
 
-  const confirmDelete = (id: string, todo: string): void => {
+  const onRefresh = (): void => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 400);
+  };
+
+  const confirmDelete = (id: string, title: string): void => {
+    const doDelete = () => {
+      const idx = todos.findIndex((t) => t.id === id);
+      const deleted = todos.find((t) => t.id === id);
+      if (!deleted) return;
+      dispatch({ type: 'remove', id });
+      setUndo({ todo: deleted, index: idx });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {}
+      );
+    };
+
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -183,30 +201,28 @@ const TodosListScreen = (): JSX.Element => {
           destructiveButtonIndex: 1,
           cancelButtonIndex: 0,
         },
-        (buttonIndex) => {
-          if (buttonIndex === 1) {
-            dispatch({ type: 'remove', id });
-            Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Warning
-            ).catch(() => {});
-          }
+        (i) => {
+          if (i === 1) doDelete();
         }
       );
     } else {
-      Alert.alert('Delete?', `"${todo}"`, [
+      Alert.alert('Delete?', `"${title}"`, [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            dispatch({ type: 'remove', id });
-            Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Warning
-            ).catch(() => {});
-          },
-        },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
       ]);
     }
+  };
+
+  const undoDelete = (): void => {
+    if (!undo) return;
+    const { todo, index } = undo;
+    const restored = [...todos];
+    restored.splice(index, 0, todo);
+    dispatch({ type: 'hydrate', todos: restored });
+    setUndo(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {}
+    );
   };
 
   return (
@@ -278,6 +294,8 @@ const TodosListScreen = (): JSX.Element => {
         style={{ marginTop: 12 }}
         data={filtered}
         keyExtractor={(t) => t.id}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListEmptyComponent={
           <Text
@@ -339,6 +357,7 @@ const TodosListScreen = (): JSX.Element => {
                 },
               ]}
               maxLength={80}
+              returnKeyType="done"
             />
             <View
               style={[
@@ -353,6 +372,39 @@ const TodosListScreen = (): JSX.Element => {
           </View>
         </View>
       </Modal>
+
+      {/* Undo snackbar */}
+      {undo && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 24,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={{ color: colors.text }} numberOfLines={1}>
+            Deleted “{undo.todo.title}”
+          </Text>
+          <Pressable
+            onPress={undoDelete}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Text style={{ color: '#2563eb', fontWeight: '700' }}>UNDO</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 };

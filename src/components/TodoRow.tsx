@@ -1,7 +1,13 @@
 import { memo } from 'react';
 import type { JSX } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, {
+  FadeInDown,
+  FadeOutUp,
+  LinearTransition,
+} from 'react-native-reanimated';
 
 import type { Todo } from '../types/models';
 
@@ -12,8 +18,6 @@ export type TodoRowProps = {
   onEdit: (id: string, title: string) => void;
   onDeleteRequest: (id: string, title: string) => void;
 };
-
-type Direction = 'left' | 'right';
 
 const ActionChip = ({
   label,
@@ -30,10 +34,7 @@ const ActionChip = ({
         alignItems: 'center',
         backgroundColor: bg,
         height: '100%',
-        borderTopRightRadius: 10,
-        borderBottomRightRadius: 10,
-        borderTopLeftRadius: 10,
-        borderBottomLeftRadius: 10,
+        borderRadius: 10,
       }}
     >
       <Text style={{ color: 'white', fontWeight: '800' }}>{label}</Text>
@@ -60,50 +61,63 @@ const Row = ({
   );
 
   return (
-    <ReanimatedSwipeable
-      renderLeftActions={renderLeftActions}
-      renderRightActions={renderRightActions}
-      overshootRight={false}
-      overshootLeft={false}
-      onSwipeableOpen={(dir: Direction) => {
-        if (dir === 'left') onToggle(item.id);
-        if (dir === 'right') onDeleteRequest(item.id, item.title);
-      }}
+    <Animated.View
+      entering={FadeInDown.springify().damping(16)}
+      exiting={FadeOutUp.springify().damping(16)}
+      layout={LinearTransition.springify().damping(16)}
     >
-      <Pressable
-        onPress={() => onToggle(item.id)}
-        onLongPress={() => onEdit(item.id, item.title)}
-        style={{
-          borderWidth: 1,
-          borderRadius: 10,
-          padding: 12,
-          gap: 6,
-          borderColor: colors.border,
-          backgroundColor: item.done ? '#e5e7eb30' : 'transparent',
+      <ReanimatedSwipeable
+        renderLeftActions={renderLeftActions}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        overshootLeft={false}
+        onSwipeableOpen={(dir: 'left' | 'right') => {
+          if (dir === 'left') onToggle(item.id);
+          if (dir === 'right') onDeleteRequest(item.id, item.title);
         }}
       >
-        <Text
+        <Pressable
+          onPress={() => onToggle(item.id)}
+          onLongPress={() => onEdit(item.id, item.title)}
           style={{
-            color: colors.text,
-            textDecorationLine: item.done ? 'line-through' : 'none',
-            opacity: item.done ? 0.7 : 1,
-          }}
-        >
-          {item.title}
-        </Text>
-        <View
-          style={{
+            borderWidth: 1,
+            borderRadius: 10,
+            padding: 12,
+            gap: 8,
+            borderColor: colors.border,
+            backgroundColor: item.done ? '#e5e7eb30' : 'transparent',
             flexDirection: 'row',
-            justifyContent: 'space-between',
             alignItems: 'center',
           }}
+          accessibilityRole="button"
+          accessibilityLabel={`Todo ${item.title} ${
+            item.done ? 'completed' : 'active'
+          }`}
         >
-          <Text style={{ color: colors.text, opacity: 0.6, fontSize: 12 }}>
-            {new Date(item.createdAt).toLocaleString()}
-          </Text>
-        </View>
-      </Pressable>
-    </ReanimatedSwipeable>
+          <Ionicons
+            name={item.done ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={item.done ? '#16a34a' : colors.text}
+            style={{ marginRight: 4 }}
+          />
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: colors.text,
+                textDecorationLine: item.done ? 'line-through' : 'none',
+                opacity: item.done ? 0.7 : 1,
+              }}
+              numberOfLines={2}
+            >
+              {item.title}
+            </Text>
+            <Text style={{ color: colors.text, opacity: 0.6, fontSize: 12 }}>
+              {new Date(item.createdAt).toLocaleString()}
+            </Text>
+          </View>
+        </Pressable>
+      </ReanimatedSwipeable>
+    </Animated.View>
   );
 };
 
