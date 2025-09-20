@@ -20,6 +20,7 @@ import {
 import { generateId } from '../utils/id';
 import type { Todo } from '../types/models';
 import TodoRow from '../components/TodoRow';
+import TodoForm, { TodoFormValues } from '../components/TodoForm';
 
 type Action =
   | { type: 'clearCompleted' }
@@ -114,7 +115,6 @@ const styles = StyleSheet.create({
 
 const TodosListScreen = (): JSX.Element => {
   const { colors } = useTheme();
-  const [title, setTitle] = useState('');
   const [todos, dispatch] = useReducer(reducer, []);
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -141,16 +141,6 @@ const TodosListScreen = (): JSX.Element => {
   const filtered = todos.filter((todo) =>
     filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
   );
-
-  const addTodo = (): void => {
-    if (!title.trim()) return;
-    if (title.trim().length > 60) {
-      Alert.alert('Too long', 'Keep titles under 60 characters.');
-      return;
-    }
-    dispatch({ type: 'add', title });
-    setTitle('');
-  };
 
   const startEdit = (id: string, currentTitle: string): void => {
     setEditingId(id);
@@ -201,9 +191,7 @@ const TodosListScreen = (): JSX.Element => {
           destructiveButtonIndex: 1,
           cancelButtonIndex: 0,
         },
-        (i) => {
-          if (i === 1) doDelete();
-        }
+        (i) => i === 1 && doDelete()
       );
     } else {
       Alert.alert('Delete?', `"${title}"`, [
@@ -230,26 +218,17 @@ const TodosListScreen = (): JSX.Element => {
       <Text style={[styles.title, { color: colors.text }]}>📝 Todos</Text>
 
       {/* Add row */}
-      <View style={styles.row}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="New todo..."
-          placeholderTextColor="#9ca3af"
-          style={[
-            styles.input,
-            styles.inputFlex,
-            {
-              color: colors.text,
-              borderColor: colors.border,
-              backgroundColor: 'transparent',
-            },
-          ]}
-          onSubmitEditing={addTodo}
-          returnKeyType="done"
-          maxLength={80}
+      <View style={{ marginTop: 12 }}>
+        <TodoForm
+          mode="add"
+          colors={colors as any}
+          onSubmit={({ title }: TodoFormValues) => {
+            dispatch({ type: 'add', title });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+              () => {}
+            );
+          }}
         />
-        <Button title="Add" onPress={addTodo} />
       </View>
 
       {/* Filters */}
@@ -341,23 +320,19 @@ const TodosListScreen = (): JSX.Element => {
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               Edit Todo
             </Text>
-            <TextInput
-              value={editingTitle}
-              onChangeText={setEditingTitle}
-              placeholder="Title"
-              placeholderTextColor="#9ca3af"
-              style={[
-                styles.input,
-                {
-                  marginTop: 8,
-                  width: '100%',
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              maxLength={80}
-              returnKeyType="done"
+            <TodoForm
+              mode="edit"
+              colors={colors as any}
+              onCancel={cancelEdit}
+              onSubmit={({ title }) => {
+                if (!editingId) return;
+                dispatch({ type: 'edit', id: editingId, title });
+                setEditingId(null);
+                setEditingTitle('');
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                ).catch(() => {});
+              }}
             />
             <View
               style={[
