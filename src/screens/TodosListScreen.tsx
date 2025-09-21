@@ -101,6 +101,23 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
   },
+  SwipeBtn: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  SwipeArea: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    maxWidth: 360,
+  },
   modalTitle: { fontSize: 18, fontWeight: '700' },
   UndoSnackBar: {
     position: 'absolute',
@@ -125,6 +142,7 @@ const TodosListScreen = (): JSX.Element => {
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ todo: Todo; index: number } | null>(null);
 
@@ -132,6 +150,8 @@ const TodosListScreen = (): JSX.Element => {
   const completed = todos.filter((todo) => todo.done).length;
   const active = total - completed;
   const isFetchingAny = useIsFetching({ queryKey: ['todos'] }) > 0;
+
+  const HINT_KEY = 'todos:swipeHintShown';
 
   const openRowRef = useRef<SwipeableMethods | null>(null);
 
@@ -163,6 +183,23 @@ const TodosListScreen = (): JSX.Element => {
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(todos)).catch(() => {});
   }, [todos]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const hint = await AsyncStorage.getItem(HINT_KEY);
+        // never shown
+        if (!hint) setShowSwipeHint(true);
+      } catch {}
+    })();
+  }, []);
+
+  const markHintSeen = async (): Promise<void> => {
+    setShowSwipeHint(false);
+    try {
+      await AsyncStorage.setItem(HINT_KEY, '1');
+    } catch {}
+  };
 
   // Remote fetch + hydrate (first time) with React Query
   const { data, refetch, isSuccess } = useQuery({
@@ -422,6 +459,7 @@ const TodosListScreen = (): JSX.Element => {
               onEdit={(id, title) => startEdit(id, title)}
               onDeleteRequest={(id, title) => confirmDelete(id, title)}
               setOpenRow={setOpenRow}
+              onAnySwipeStart={markHintSeen}
             />
           )}
           contentContainerStyle={{ paddingBottom: 16 }}
@@ -480,6 +518,41 @@ const TodosListScreen = (): JSX.Element => {
               <Text style={{ color: '#2563eb', fontWeight: '700' }}>UNDO</Text>
             </Pressable>
           </View>
+        )}
+
+        {showSwipeHint && (
+          <Pressable
+            onPress={markHintSeen}
+            style={styles.SwipeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss swipe hint"
+          >
+            <View
+              style={[
+                styles.SwipeArea,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: colors.text,
+                  marginBottom: 8,
+                }}
+              >
+                Tip: swipe a todo
+              </Text>
+              <Text style={{ color: colors.text, opacity: 0.8 }}>
+                Swipe<Text style={{ fontWeight: '700' }}>right</Text> to mark
+                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>{' '}
+                to delete.
+              </Text>
+              <Text style={{ marginTop: 12, color: colors.text, opacity: 0.7 }}>
+                Tap anywhere to dismiss.
+              </Text>
+            </View>
+          </Pressable>
         )}
       </View>
     </KeyboardAvoidingView>

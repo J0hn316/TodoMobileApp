@@ -36,29 +36,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  RenderLeftActionStyles: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    justifyContent: 'center',
+    paddingLeft: 20,
+    borderRadius: 10,
+  },
+  text: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  RenderRightActionStyles: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 20,
+    borderRadius: 10,
+  },
 });
 
 export type TodoRowProps = {
   item: Todo;
   colors: { text: string; border: string };
+  onAnySwipeStart?: () => void;
   onToggle: (id: string) => void;
   onEdit: (id: string, title: string) => void;
   setOpenRow?: (row: SwipeableMethods | null) => void;
   onDeleteRequest: (id: string, title: string) => void;
-};
-
-const ActionChip = ({
-  label,
-  bg,
-}: {
-  label: string;
-  bg: string;
-}): JSX.Element => {
-  return (
-    <View style={[styles.ActionChipStyles, { backgroundColor: bg }]}>
-      <Text style={styles.label}>{label}</Text>
-    </View>
-  );
 };
 
 const Row = ({
@@ -67,6 +74,7 @@ const Row = ({
   onEdit,
   onToggle,
   setOpenRow,
+  onAnySwipeStart,
   onDeleteRequest,
 }: TodoRowProps): JSX.Element => {
   const swipeRef = useRef<SwipeableMethods | null>(null);
@@ -77,14 +85,15 @@ const Row = ({
   }));
 
   const renderLeftActions = (): JSX.Element => (
-    <ActionChip
-      label={item.done ? 'UNDO' : 'DONE'}
-      bg={item.done ? '#6b7280' : '#16a34a'}
-    />
+    <View style={styles.RenderLeftActionStyles}>
+      <Text style={styles.text}>Done</Text>
+    </View>
   );
 
   const renderRightActions = (): JSX.Element => (
-    <ActionChip label="DELETE" bg="#ef4444" />
+    <View style={styles.RenderRightActionStyles}>
+      <Text style={styles.text}>Delete</Text>
+    </View>
   );
 
   return (
@@ -101,11 +110,14 @@ const Row = ({
         overshootLeft={false}
         leftThreshold={48}
         rightThreshold={72}
-        onSwipeableWillOpen={() => setOpenRow?.(swipeRef.current)}
+        onSwipeableWillOpen={() => {
+          setOpenRow?.(swipeRef.current);
+          onAnySwipeStart?.();
+        }}
         onSwipeableWillClose={() => setOpenRow?.(null)}
         onSwipeableOpen={(dir: 'left' | 'right') => {
-          if (dir === 'left') onToggle(item.id);
-          if (dir === 'right') onDeleteRequest(item.id, item.title);
+          if (dir === 'right') onToggle(item.id);
+          if (dir === 'left') onDeleteRequest(item.id, item.title);
         }}
       >
         <Animated.View style={aStyle}>
