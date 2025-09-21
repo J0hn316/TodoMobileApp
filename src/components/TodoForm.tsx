@@ -35,6 +35,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlignVertical: 'center',
   },
+  inputFlex: {
+    flex: 1,
+  },
   error: { color: '#ef4444', marginTop: 6, fontSize: 13 },
 });
 
@@ -60,7 +63,7 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
   }, [setFocus]);
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={styles.row}>
       <Controller
         control={control}
         name="title"
@@ -74,6 +77,7 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
             placeholderTextColor="#9ca3af"
             style={[
               styles.input,
+              styles.inputFlex,
               {
                 color: colors.text,
                 borderColor: colors.border,
