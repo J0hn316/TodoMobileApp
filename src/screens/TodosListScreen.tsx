@@ -118,6 +118,11 @@ const styles = StyleSheet.create({
     padding: 16,
     maxWidth: 360,
   },
+  SwipeText: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   modalTitle: { fontSize: 18, fontWeight: '700' },
   UndoSnackBar: {
     position: 'absolute',
@@ -163,10 +168,6 @@ const TodosListScreen = (): JSX.Element => {
     }
     openRowRef.current = row;
   };
-
-  try {
-    openRowRef.current?.close();
-  } catch {}
 
   // Load on mount
   useEffect(() => {
@@ -484,9 +485,11 @@ const TodosListScreen = (): JSX.Element => {
               </Text>
 
               <TodoForm
+                key={editingId ?? 'edit'}
                 mode="edit"
                 colors={colors as any}
                 onCancel={cancelEdit}
+                defaultValues={{ title: editingTitle }}
                 onSubmit={({ title }) => {
                   if (!editingId) return;
                   onEditSubmit(editingId, title);
@@ -533,19 +536,12 @@ const TodosListScreen = (): JSX.Element => {
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
             >
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: '700',
-                  color: colors.text,
-                  marginBottom: 8,
-                }}
-              >
+              <Text style={[styles.SwipeText, { color: colors.text }]}>
                 Tip: swipe a todo
               </Text>
               <Text style={{ color: colors.text, opacity: 0.8 }}>
-                Swipe<Text style={{ fontWeight: '700' }}>right</Text> to mark
-                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>{' '}
+                Swipe <Text style={{ fontWeight: '700' }}>right</Text>to mark
+                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>
                 to delete.
               </Text>
               <Text style={{ marginTop: 12, color: colors.text, opacity: 0.7 }}>
