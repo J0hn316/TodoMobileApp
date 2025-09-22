@@ -523,6 +523,7 @@ const TodosListScreen = (): JSX.Element => {
           </View>
         )}
 
+        {/* Swipe hint */}
         {showSwipeHint && (
           <Pressable
             onPress={markHintSeen}
@@ -537,17 +538,32 @@ const TodosListScreen = (): JSX.Element => {
               ]}
             >
               <Text style={[styles.SwipeText, { color: colors.text }]}>
-                Tip: swipe a todo
+                Tip: Swipe a todo
               </Text>
               <Text style={{ color: colors.text, opacity: 0.8 }}>
-                Swipe <Text style={{ fontWeight: '700' }}>right</Text>to mark
-                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>
+                Swipe <Text style={{ fontWeight: '700' }}>right</Text> to mark
+                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>{' '}
                 to delete.
               </Text>
               <Text style={{ marginTop: 12, color: colors.text, opacity: 0.7 }}>
                 Tap anywhere to dismiss.
               </Text>
             </View>
+          </Pressable>
+        )}
+
+        {/* DEV-ONLY: Reset Swipe Hint */}
+        {__DEV__ && (
+          <Pressable
+            onPress={async () => {
+              await AsyncStorage.removeItem('todos:swipeHintShown');
+              setShowSwipeHint(true); // pop it up immediately
+            }}
+            style={{ marginTop: 12 }}
+          >
+            <Text style={{ color: 'red', textAlign: 'center' }}>
+              🔄 Reset Swipe Hint
+            </Text>
           </Pressable>
         )}
       </View>
