@@ -24,7 +24,7 @@ export type TodoFormValues = z.infer<typeof schema>;
 
 type Props = {
   mode: 'add' | 'edit';
-  defaultValues?: TodoFormValues;
+  defaultValues?: Partial<TodoFormValues>;
   onSubmit: (values: TodoFormValues) => void;
   onCancel?: () => void;
   // minimal color contract pulled from theme
@@ -108,9 +108,11 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
                   backgroundColor: colors.card,
                 },
               ]}
+              autoCapitalize="sentences"
+              autoCorrect
               returnKeyType="done"
               underlineColorAndroid="transparent"
-              maxLength={80}
+              maxLength={60}
               onSubmitEditing={handleSubmit(onSubmit)}
             />
           )}
@@ -134,7 +136,7 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
               Keyboard.dismiss();
               onSubmit(vals);
             })}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
           />
         </View>
       </View>

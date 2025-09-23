@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { memo, useRef, useCallback } from 'react';
 import type { JSX } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
@@ -84,16 +84,22 @@ const Row = ({
     transform: [{ scale: scale.value }],
   }));
 
-  const renderLeftActions = (): JSX.Element => (
-    <View style={styles.RenderLeftActionStyles}>
-      <Text style={styles.text}>Done</Text>
-    </View>
+  const renderLeftActions = useCallback(
+    (): JSX.Element => (
+      <View style={styles.RenderLeftActionStyles}>
+        <Text style={styles.text}>Done</Text>
+      </View>
+    ),
+    []
   );
 
-  const renderRightActions = (): JSX.Element => (
-    <View style={styles.RenderRightActionStyles}>
-      <Text style={styles.text}>Delete</Text>
-    </View>
+  const renderRightActions = useCallback(
+    (): JSX.Element => (
+      <View style={styles.RenderRightActionStyles}>
+        <Text style={styles.text}>Delete</Text>
+      </View>
+    ),
+    []
   );
 
   return (
@@ -116,8 +122,14 @@ const Row = ({
         }}
         onSwipeableWillClose={() => setOpenRow?.(null)}
         onSwipeableOpen={(dir: 'left' | 'right') => {
-          if (dir === 'right') onToggle(item.id);
-          if (dir === 'left') onDeleteRequest(item.id, item.title);
+          if (dir === 'right') {
+            onToggle(item.id);
+            swipeRef.current?.close();
+          }
+          if (dir === 'left') {
+            onDeleteRequest(item.id, item.title);
+            swipeRef.current?.close();
+          }
         }}
       >
         <Animated.View style={aStyle}>
@@ -135,9 +147,8 @@ const Row = ({
               },
             ]}
             accessibilityRole="button"
-            accessibilityLabel={`Todo ${item.title} ${
-              item.done ? 'completed' : 'active'
-            }`}
+            accessibilityLabel={`Todo ${item.title}`}
+            accessibilityState={{ selected: item.done, disabled: false }}
           >
             <Ionicons
               name={item.done ? 'checkbox' : 'square-outline'}

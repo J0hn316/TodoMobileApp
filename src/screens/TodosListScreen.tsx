@@ -1,9 +1,9 @@
 import type { JSX } from 'react';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '@react-navigation/native';
-import { useEffect, useReducer, useState, useRef } from 'react';
+import { useTheme, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useIsFetching } from '@tanstack/react-query';
+import { useEffect, useReducer, useState, useRef, useCallback } from 'react';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import {
   View,
@@ -142,8 +142,8 @@ const styles = StyleSheet.create({
 const TodosListScreen = (): JSX.Element => {
   const { colors } = useTheme();
   const hydratedFromRemote = useRef(false);
-
   const [todos, dispatch] = useReducer(reducer, []);
+
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
@@ -185,6 +185,7 @@ const TodosListScreen = (): JSX.Element => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(todos)).catch(() => {});
   }, [todos]);
 
+  // One-time swipe hint
   useEffect(() => {
     (async () => {
       try {
@@ -222,6 +223,13 @@ const TodosListScreen = (): JSX.Element => {
     }
   }, [isSuccess, data, todos.length]);
 
+  // Refetch on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
   const onRefresh = (): void => {
     setRefreshing(true);
     refetch().finally(() => setRefreshing(false));
@@ -241,8 +249,10 @@ const TodosListScreen = (): JSX.Element => {
       dispatch({ type: 'hydrate', todos: [optimistic, ...todos] });
       return { prev };
     },
-    onError: (_err, _vars, ctx) =>
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev }),
+    onError: (err, _vars, ctx) => {
+      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
+      Alert.alert('Add failed', (err as Error)?.message ?? 'Please try again.');
+    },
   });
 
   const toggleMut = useMutation({
@@ -256,8 +266,13 @@ const TodosListScreen = (): JSX.Element => {
       });
       return { prev };
     },
-    onError: (_err, _vars, ctx) =>
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev }),
+    onError: (err, _vars, ctx) => {
+      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
+      Alert.alert(
+        'Toggle failed',
+        (err as Error)?.message ?? 'Please try again.'
+      );
+    },
   });
 
   const editMut = useMutation({
@@ -271,8 +286,13 @@ const TodosListScreen = (): JSX.Element => {
       });
       return { prev };
     },
-    onError: (_err, _vars, ctx) =>
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev }),
+    onError: (err, _vars, ctx) => {
+      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
+      Alert.alert(
+        'Edit failed',
+        (err as Error)?.message ?? 'Please try again.'
+      );
+    },
   });
 
   const delMut = useMutation({
@@ -282,22 +302,30 @@ const TodosListScreen = (): JSX.Element => {
       dispatch({ type: 'hydrate', todos: todos.filter((t) => t.id !== id) });
       return { prev };
     },
-    onError: (_err, _vars, ctx) =>
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev }),
+    onError: (err, _vars, ctx) => {
+      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
+      Alert.alert(
+        'Delete failed',
+        (err as Error)?.message ?? 'Please try again.'
+      );
+    },
   });
 
   // Handlers using mutations
   const onAdd = (title: string): void => {
+    if (addMut.isPending) return;
     addMut.mutate(title);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
   const onToggle = (id: string, next: boolean): void => {
+    if (toggleMut.isPending) return;
     toggleMut.mutate({ id, next });
     Haptics.selectionAsync().catch(() => {});
   };
 
   const onEditSubmit = (id: string, title: string): void => {
+    if (editMut.isPending) return;
     editMut.mutate({ id, title });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {}
@@ -305,6 +333,7 @@ const TodosListScreen = (): JSX.Element => {
   };
 
   const onDelete = (id: string): void => {
+    if (delMut.isPending) return;
     delMut.mutate(id);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => {}
@@ -316,48 +345,51 @@ const TodosListScreen = (): JSX.Element => {
     filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
   );
 
-  const startEdit = (id: string, currentTitle: string): void => {
+  const startEdit = useCallback((id: string, currentTitle: string): void => {
     setEditingId(id);
     setEditingTitle(currentTitle);
-  };
+  }, []);
 
   const cancelEdit = (): void => {
     setEditingId(null);
     setEditingTitle('');
   };
 
-  const confirmDelete = (id: string, title: string): void => {
-    const doDelete = () => {
-      // close an open row (prevents stuck gestures)
-      try {
-        openRowRef.current?.close();
-      } catch {}
+  const confirmDelete = useCallback(
+    (id: string, title: string): void => {
+      const doDelete = () => {
+        // close an open row (prevents stuck gestures)
+        try {
+          openRowRef.current?.close();
+        } catch {}
 
-      const idx = todos.findIndex((t) => t.id === id);
-      const deleted = todos.find((t) => t.id === id);
+        const idx = todos.findIndex((t) => t.id === id);
+        const deleted = todos.find((t) => t.id === id);
 
-      if (!deleted) return;
-      onDelete(id);
-      setUndo({ todo: deleted, index: idx });
-    };
+        if (!deleted) return;
+        onDelete(id);
+        setUndo({ todo: deleted, index: idx });
+      };
 
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: `Delete "${title}"?`,
-          options: ['Cancel', 'Delete'],
-          destructiveButtonIndex: 1,
-          cancelButtonIndex: 0,
-        },
-        (i) => i === 1 && doDelete()
-      );
-    } else {
-      Alert.alert('Delete?', `"${title}"`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: doDelete },
-      ]);
-    }
-  };
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            title: `Delete "${title}"?`,
+            options: ['Cancel', 'Delete'],
+            destructiveButtonIndex: 1,
+            cancelButtonIndex: 0,
+          },
+          (i) => i === 1 && doDelete()
+        );
+      } else {
+        Alert.alert('Delete?', `"${title}"`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
+        ]);
+      }
+    },
+    [todos]
+  );
 
   const undoDelete = (): void => {
     if (!undo) return;
@@ -446,6 +478,10 @@ const TodosListScreen = (): JSX.Element => {
           style={styles.list}
           data={filtered}
           keyExtractor={(t) => t.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews
           refreshing={refreshing}
           onRefresh={onRefresh}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -472,6 +508,7 @@ const TodosListScreen = (): JSX.Element => {
           transparent
           animationType="slide"
           onRequestClose={cancelEdit}
+          statusBarTranslucent
         >
           <View style={styles.modalBackdrop}>
             <View
