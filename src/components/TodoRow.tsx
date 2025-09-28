@@ -1,7 +1,7 @@
 import { memo, useRef, useCallback } from 'react';
 import type { JSX } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View, StyleSheet } from 'react-native';
+import { Pressable, Text, View, StyleSheet, Platform } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeOutUp,
@@ -15,7 +15,7 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import type { Todo } from '../types/models';
-import { ROW_HEIGHT } from '../constants/layout';
+import { ROW_HEIGHT, SPACING, cardShadow } from '../theme/layout';
 
 const styles = StyleSheet.create({
   ActionChipStyles: {
@@ -33,10 +33,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    gap: 8,
+    gap: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
     height: ROW_HEIGHT,
+    ...cardShadow,
   },
   RenderLeftActionStyles: {
     flex: 1,
@@ -64,7 +65,7 @@ export type TodoRowProps = {
   item: Todo;
   colors: { text: string; border: string };
   onAnySwipeStart?: () => void;
-  onToggle: (id: string) => void;
+  onToggle: (id: string, next: boolean) => void;
   onEdit: (id: string, title: string) => void;
   setOpenRow?: (row: SwipeableMethods | null) => void;
   onDeleteRequest: (id: string, title: string) => void;
@@ -125,7 +126,7 @@ const Row = ({
         onSwipeableWillClose={() => setOpenRow?.(null)}
         onSwipeableOpen={(dir: 'left' | 'right') => {
           if (dir === 'right') {
-            onToggle(item.id);
+            onToggle(item.id, !item.done);
             swipeRef.current?.close();
           }
           if (dir === 'left') {
@@ -137,10 +138,16 @@ const Row = ({
         <Animated.View style={aStyle}>
           <Pressable
             delayLongPress={150}
-            onPress={() => onToggle(item.id)}
+            onPress={() => onToggle(item.id, !item.done)}
             onLongPress={() => onEdit(item.id, item.title)}
             onPressOut={() => (scale.value = withSpring(1, { damping: 20 }))}
             onPressIn={() => (scale.value = withSpring(0.98, { damping: 20 }))}
+            hitSlop={SPACING.sm}
+            android_ripple={
+              Platform.OS === 'android'
+                ? { color: '#00000014', borderless: false }
+                : undefined
+            }
             style={[
               styles.PressableStyles,
               {
@@ -149,8 +156,25 @@ const Row = ({
               },
             ]}
             accessibilityRole="button"
-            accessibilityLabel={`Todo ${item.title}`}
-            accessibilityState={{ selected: item.done, disabled: false }}
+            accessibilityLabel={item.title}
+            accessibilityState={{ checked: item.done }}
+            accessibilityHint="Double tap to toggle. Long press to edit."
+            accessibilityActions={[
+              {
+                name: 'activate',
+                label: item.done ? 'Mark incomplete' : 'Mark complete',
+              },
+              { name: 'longpress', label: 'Edit' },
+              { name: 'magicTap', label: 'Delete' },
+            ]}
+            onAccessibilityAction={({ nativeEvent }) => {
+              if (nativeEvent.actionName === 'activate')
+                onToggle(item.id, !item.done);
+              if (nativeEvent.actionName === 'longpress')
+                onEdit(item.id, item.title);
+              if (nativeEvent.actionName === 'magicTap')
+                onDeleteRequest(item.id, item.title);
+            }}
           >
             <Ionicons
               name={item.done ? 'checkbox' : 'square-outline'}
@@ -162,6 +186,7 @@ const Row = ({
               <Text
                 style={{
                   color: colors.text,
+                  lineHeight: 20,
                   textDecorationLine: item.done ? 'line-through' : 'none',
                   opacity: item.done ? 0.7 : 1,
                 }}

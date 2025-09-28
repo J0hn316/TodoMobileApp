@@ -1,10 +1,16 @@
 import type { JSX } from 'react';
 import * as Haptics from 'expo-haptics';
-import { FlashList, type ListRenderItemInfo } from '../libs/flashlist';
 import { useTheme, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useIsFetching } from '@tanstack/react-query';
-import { useEffect, useReducer, useState, useRef, useCallback } from 'react';
+import {
+  useEffect,
+  useReducer,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import {
   View,
@@ -20,17 +26,19 @@ import {
 } from 'react-native';
 
 import { generateId } from '../utils/id';
-import { applyRowLayout } from '../utils/layout';
+
+import applyRowLayout from '../theme/rowLayout';
 
 import type { Todo } from '../types/models';
-
-import { ROW_HEIGHT } from '../constants/layout';
 
 import TodoRow from '../components/TodoRow';
 import EmptyState from '../components/EmptyState';
 import TodoForm, { TodoFormValues } from '../components/TodoForm';
 
+import { FlashList, type ListRenderItemInfo } from '../libs/flashlist';
+
 import { fetchTodos, createTodo, updateTodo, deleteTodo } from '../api/todos';
+import { normalizeTodos } from '../utils/normalize';
 
 type Action =
   | { type: 'clearCompleted' }
@@ -149,6 +157,7 @@ const TodosListScreen = (): JSX.Element => {
   const { colors } = useTheme();
   const hydratedFromRemote = useRef(false);
   const [todos, dispatch] = useReducer(reducer, []);
+  const todosRef = useRef<Todo[]>(todos);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -180,8 +189,10 @@ const TodosListScreen = (): JSX.Element => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw)
-          dispatch({ type: 'hydrate', todos: JSON.parse(raw) as Todo[] });
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          dispatch({ type: 'hydrate', todos: normalizeTodos(parsed) });
+        }
       } catch {}
     })();
   }, []);
@@ -189,6 +200,10 @@ const TodosListScreen = (): JSX.Element => {
   // Save on change
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(todos)).catch(() => {});
+  }, [todos]);
+
+  useEffect(() => {
+    todosRef.current = todos;
   }, [todos]);
 
   // One-time swipe hint
@@ -224,7 +239,7 @@ const TodosListScreen = (): JSX.Element => {
       data.length > 0 &&
       todos.length === 0
     ) {
-      dispatch({ type: 'hydrate', todos: data });
+      dispatch({ type: 'hydrate', todos: normalizeTodos(data) });
       hydratedFromRemote.current = true;
     }
   }, [isSuccess, data, todos.length]);
@@ -251,8 +266,8 @@ const TodosListScreen = (): JSX.Element => {
         done: false,
         createdAt: Date.now(),
       };
-      const prev = todos;
-      dispatch({ type: 'hydrate', todos: [optimistic, ...todos] });
+      const prev = todosRef.current;
+      dispatch({ type: 'hydrate', todos: [optimistic, ...prev] });
       return { prev };
     },
     onError: (err, _vars, ctx) => {
@@ -264,12 +279,9 @@ const TodosListScreen = (): JSX.Element => {
   const toggleMut = useMutation({
     mutationFn: ({ id, next }: { id: string; next: boolean }) =>
       updateTodo(id, { done: next }),
-    onMutate: async ({ id, next }) => {
-      const prev = todos;
-      dispatch({
-        type: 'hydrate',
-        todos: todos.map((t) => (t.id === id ? { ...t, done: next } : t)),
-      });
+    onMutate: async ({ id }) => {
+      const prev = todosRef.current;
+      dispatch({ type: 'toggle', id });
       return { prev };
     },
     onError: (err, _vars, ctx) => {
@@ -285,10 +297,11 @@ const TodosListScreen = (): JSX.Element => {
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       updateTodo(id, { title }),
     onMutate: async ({ id, title }) => {
-      const prev = todos;
+      const prev = todosRef.current;
       dispatch({
-        type: 'hydrate',
-        todos: todos.map((t) => (t.id === id ? { ...t, title } : t)),
+        type: 'edit',
+        id,
+        title,
       });
       return { prev };
     },
@@ -304,8 +317,8 @@ const TodosListScreen = (): JSX.Element => {
   const delMut = useMutation({
     mutationFn: (id: string) => deleteTodo(id),
     onMutate: async (id) => {
-      const prev = todos;
-      dispatch({ type: 'hydrate', todos: todos.filter((t) => t.id !== id) });
+      const prev = todosRef.current;
+      dispatch({ type: 'remove', id });
       return { prev };
     },
     onError: (err, _vars, ctx) => {
@@ -339,63 +352,76 @@ const TodosListScreen = (): JSX.Element => {
   };
 
   const onDelete = (id: string): void => {
-    if (delMut.isPending) return;
     delMut.mutate(id);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => {}
     );
   };
 
-  // Local helpers
-  const filtered = todos.filter((todo) =>
-    filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
+  // Derived + memoized
+  const filtered = useMemo(
+    () =>
+      todos.filter((todo) =>
+        filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
+      ),
+    [todos, filter]
   );
 
-  const startEdit = useCallback((id: string, currentTitle: string): void => {
+  const handleToggle = useCallback((id: string, next: boolean): void => {
+    onToggle(id, next);
+  }, []);
+
+  const handleEdit = useCallback(
+    (id: string, title: string): void => startEdit(id, title),
+    []
+  );
+
+  const handleDeleteRequest = useCallback(
+    (id: string, title: string): void => confirmDelete(id, title),
+    []
+  );
+
+  // Local helpers
+  const startEdit = (id: string, currentTitle: string): void => {
     setEditingId(id);
     setEditingTitle(currentTitle);
-  }, []);
+  };
 
   const cancelEdit = (): void => {
     setEditingId(null);
     setEditingTitle('');
   };
 
-  const confirmDelete = useCallback(
-    (id: string, title: string): void => {
-      const doDelete = () => {
-        // close an open row (prevents stuck gestures)
-        try {
-          openRowRef.current?.close();
-        } catch {}
+  const confirmDelete = (id: string, title: string): void => {
+    const doDelete = (): void => {
+      try {
+        openRowRef.current?.close();
+      } catch {}
+      const idx = todos.findIndex((todo) => String(todo.id) === String(id));
+      const deleted = todos.find((todo) => String(todo.id) === String(id));
 
-        const idx = todos.findIndex((t) => t.id === id);
-        const deleted = todos.find((t) => t.id === id);
-
-        if (!deleted) return;
-        onDelete(id);
+      onDelete(id);
+      if (idx >= 0 && deleted) {
         setUndo({ todo: deleted, index: idx });
-      };
-
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            title: `Delete "${title}"?`,
-            options: ['Cancel', 'Delete'],
-            destructiveButtonIndex: 1,
-            cancelButtonIndex: 0,
-          },
-          (i) => i === 1 && doDelete()
-        );
-      } else {
-        Alert.alert('Delete?', `"${title}"`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: doDelete },
-        ]);
       }
-    },
-    [todos]
-  );
+    };
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: `Delete "${title}"?`,
+          options: ['Cancel', 'Delete'],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 0,
+        },
+        (i) => i === 1 && doDelete()
+      );
+    } else {
+      Alert.alert('Delete?', `"${title}"`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  };
 
   const undoDelete = (): void => {
     if (!undo) return;
@@ -441,7 +467,10 @@ const TodosListScreen = (): JSX.Element => {
             return (
               <Pressable
                 key={f}
-                onPress={() => setFilter(f)}
+                onPress={() => {
+                  setFilter(f);
+                  Haptics.selectionAsync().catch(() => {});
+                }}
                 style={[
                   styles.filterBtn,
                   {
@@ -480,7 +509,7 @@ const TodosListScreen = (): JSX.Element => {
         </View>
 
         {/* List */}
-        <FlashList<Todo>
+        <FlashList
           style={styles.list}
           data={filtered}
           keyExtractor={(t: Todo) => t.id}
@@ -493,11 +522,9 @@ const TodosListScreen = (): JSX.Element => {
             <TodoRow
               item={item}
               colors={colors as any}
-              onToggle={(id) =>
-                onToggle(id, !todos.find((todo) => todo.id === id)?.done)
-              }
-              onEdit={(id, title) => startEdit(id, title)}
-              onDeleteRequest={(id, title) => confirmDelete(id, title)}
+              onToggle={handleToggle}
+              onEdit={handleEdit}
+              onDeleteRequest={handleDeleteRequest}
               setOpenRow={setOpenRow}
               onAnySwipeStart={markHintSeen}
             />
@@ -512,7 +539,7 @@ const TodosListScreen = (): JSX.Element => {
           onRequestClose={cancelEdit}
           statusBarTranslucent
         >
-          <View style={styles.modalBackdrop}>
+          <View style={styles.modalBackdrop} pointerEvents="box-none">
             <View
               style={[
                 styles.modalCard,
