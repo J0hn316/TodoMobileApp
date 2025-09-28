@@ -239,7 +239,7 @@ const TodosListScreen = (): JSX.Element => {
       data.length > 0 &&
       todos.length === 0
     ) {
-      dispatch({ type: 'hydrate', todos: normalizeTodos(data) });
+      dispatch({ type: 'hydrate', todos: data });
       hydratedFromRemote.current = true;
     }
   }, [isSuccess, data, todos.length]);
@@ -397,8 +397,8 @@ const TodosListScreen = (): JSX.Element => {
       try {
         openRowRef.current?.close();
       } catch {}
-      const idx = todos.findIndex((todo) => String(todo.id) === String(id));
-      const deleted = todos.find((todo) => String(todo.id) === String(id));
+      const idx = todos.findIndex((todo) => todo.id === id);
+      const deleted = todos.find((todo) => todo.id === id);
 
       onDelete(id);
       if (idx >= 0 && deleted) {
