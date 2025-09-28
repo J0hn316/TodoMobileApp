@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import * as Haptics from 'expo-haptics';
+import { FlashList, type ListRenderItemInfo } from '../libs/flashlist';
 import { useTheme, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useIsFetching } from '@tanstack/react-query';
@@ -10,7 +11,6 @@ import {
   Text,
   Alert,
   Modal,
-  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -20,10 +20,16 @@ import {
 } from 'react-native';
 
 import { generateId } from '../utils/id';
+import { applyRowLayout } from '../utils/layout';
+
 import type { Todo } from '../types/models';
+
+import { ROW_HEIGHT } from '../constants/layout';
+
 import TodoRow from '../components/TodoRow';
 import EmptyState from '../components/EmptyState';
 import TodoForm, { TodoFormValues } from '../components/TodoForm';
+
 import { fetchTodos, createTodo, updateTodo, deleteTodo } from '../api/todos';
 
 type Action =
@@ -474,19 +480,16 @@ const TodosListScreen = (): JSX.Element => {
         </View>
 
         {/* List */}
-        <FlatList
+        <FlashList<Todo>
           style={styles.list}
           data={filtered}
-          keyExtractor={(t) => t.id}
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          removeClippedSubviews
+          keyExtractor={(t: Todo) => t.id}
+          overrideItemLayout={applyRowLayout as any}
           refreshing={refreshing}
           onRefresh={onRefresh}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={<EmptyState color={colors.text} />}
-          renderItem={({ item }) => (
+          renderItem={({ item }: ListRenderItemInfo<Todo>) => (
             <TodoRow
               item={item}
               colors={colors as any}
@@ -499,7 +502,6 @@ const TodosListScreen = (): JSX.Element => {
               onAnySwipeStart={markHintSeen}
             />
           )}
-          contentContainerStyle={{ paddingBottom: 16 }}
         />
 
         {/* Edit modal */}

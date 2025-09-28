@@ -15,6 +15,7 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import type { Todo } from '../types/models';
+import { ROW_HEIGHT } from '../constants/layout';
 
 const styles = StyleSheet.create({
   ActionChipStyles: {
@@ -35,6 +36,7 @@ const styles = StyleSheet.create({
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    height: ROW_HEIGHT,
   },
   RenderLeftActionStyles: {
     flex: 1,
