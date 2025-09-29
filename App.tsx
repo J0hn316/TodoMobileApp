@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import RootNavigator from './src/navigation/RootNavigator';
+import { SnackbarProvider } from './src/providers/SnackbarProvider';
 
 const queryClient = new QueryClient();
 
@@ -13,7 +14,9 @@ const App = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <RootNavigator />
+          <SnackbarProvider>
+            <RootNavigator />
+          </SnackbarProvider>
         </QueryClientProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

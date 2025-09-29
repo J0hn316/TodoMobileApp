@@ -31,6 +31,8 @@ import applyRowLayout from '../theme/rowLayout';
 
 import type { Todo } from '../types/models';
 
+import { useSnackbar } from '../providers/SnackbarProvider';
+
 import TodoRow from '../components/TodoRow';
 import EmptyState from '../components/EmptyState';
 import TodoForm, { TodoFormValues } from '../components/TodoForm';
@@ -138,33 +140,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalTitle: { fontSize: 18, fontWeight: '700' },
-  UndoSnackBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
 });
 
 const TodosListScreen = (): JSX.Element => {
   const { colors } = useTheme();
+  const { enqueue } = useSnackbar();
+
   const hydratedFromRemote = useRef(false);
   const [todos, dispatch] = useReducer(reducer, []);
+
   const todosRef = useRef<Todo[]>(todos);
+  useEffect(() => {
+    todosRef.current = todos;
+  }, [todos]);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [undo, setUndo] = useState<{ todo: Todo; index: number } | null>(null);
 
   const total = todos.length;
   const completed = todos.filter((todo) => todo.done).length;
@@ -189,10 +183,8 @@ const TodosListScreen = (): JSX.Element => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          dispatch({ type: 'hydrate', todos: normalizeTodos(parsed) });
-        }
+        if (raw)
+          dispatch({ type: 'hydrate', todos: JSON.parse(raw) as Todo[] });
       } catch {}
     })();
   }, []);
@@ -200,10 +192,6 @@ const TodosListScreen = (): JSX.Element => {
   // Save on change
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(todos)).catch(() => {});
-  }, [todos]);
-
-  useEffect(() => {
-    todosRef.current = todos;
   }, [todos]);
 
   // One-time swipe hint
@@ -256,6 +244,19 @@ const TodosListScreen = (): JSX.Element => {
     refetch().finally(() => setRefreshing(false));
   };
 
+  // Undo helper
+  const undoDeleteNow = (deleted: Todo, index: number): void => {
+    const current = todosRef.current;
+    const restored = [...current];
+    const safeIndex = Math.max(0, Math.min(index, restored.length));
+    restored.splice(safeIndex, 0, deleted);
+
+    dispatch({ type: 'hydrate', todos: restored });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {}
+    );
+  };
+
   // Optimistic mutations
   const addMut = useMutation({
     mutationFn: (title: string) => createTodo(title),
@@ -272,7 +273,13 @@ const TodosListScreen = (): JSX.Element => {
     },
     onError: (err, _vars, ctx) => {
       ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      Alert.alert('Add failed', (err as Error)?.message ?? 'Please try again.');
+      enqueue({
+        kind: 'error',
+        message: (err as Error)?.message ?? 'Add failed',
+      });
+    },
+    onSuccess: () => {
+      enqueue({ kind: 'success', message: 'Todo added' });
     },
   });
 
@@ -286,10 +293,10 @@ const TodosListScreen = (): JSX.Element => {
     },
     onError: (err, _vars, ctx) => {
       ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      Alert.alert(
-        'Toggle failed',
-        (err as Error)?.message ?? 'Please try again.'
-      );
+      enqueue({
+        kind: 'error',
+        message: (err as Error)?.message ?? 'Update failed',
+      });
     },
   });
 
@@ -307,10 +314,13 @@ const TodosListScreen = (): JSX.Element => {
     },
     onError: (err, _vars, ctx) => {
       ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      Alert.alert(
-        'Edit failed',
-        (err as Error)?.message ?? 'Please try again.'
-      );
+      enqueue({
+        kind: 'error',
+        message: (err as Error)?.message ?? 'Save failed',
+      });
+    },
+    onSuccess: () => {
+      enqueue({ kind: 'success', message: 'Saved' });
     },
   });
 
@@ -323,10 +333,13 @@ const TodosListScreen = (): JSX.Element => {
     },
     onError: (err, _vars, ctx) => {
       ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      Alert.alert(
-        'Delete failed',
-        (err as Error)?.message ?? 'Please try again.'
-      );
+      enqueue({
+        kind: 'error',
+        message: (err as Error)?.message ?? 'Delete failed',
+      });
+    },
+    onSuccess: () => {
+      enqueue({ kind: 'success', message: 'Deleted' });
     },
   });
 
@@ -352,6 +365,7 @@ const TodosListScreen = (): JSX.Element => {
   };
 
   const onDelete = (id: string): void => {
+    if (delMut.isPending) return;
     delMut.mutate(id);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => {}
@@ -397,12 +411,23 @@ const TodosListScreen = (): JSX.Element => {
       try {
         openRowRef.current?.close();
       } catch {}
-      const idx = todos.findIndex((todo) => todo.id === id);
-      const deleted = todos.find((todo) => todo.id === id);
+      // find in latest list
+      const idx = todosRef.current.findIndex(
+        (todo) => String(todo.id) === String(id)
+      );
+      const deleted = todosRef.current.find(
+        (todo) => String(todo.id) === String(id)
+      );
 
       onDelete(id);
       if (idx >= 0 && deleted) {
-        setUndo({ todo: deleted, index: idx });
+        enqueue({
+          kind: 'info',
+          message: `Deleted “${deleted.title}”`,
+          actionLabel: 'UNDO',
+          durationMs: 5000,
+          onAction: () => undoDeleteNow(deleted, idx),
+        });
       }
     };
     if (Platform.OS === 'ios') {
@@ -422,25 +447,6 @@ const TodosListScreen = (): JSX.Element => {
       ]);
     }
   };
-
-  const undoDelete = (): void => {
-    if (!undo) return;
-    const { todo, index } = undo;
-    const restored = [...todos];
-    restored.splice(index, 0, todo);
-    dispatch({ type: 'hydrate', todos: restored });
-    setUndo(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-      () => {}
-    );
-  };
-
-  // Undo auto-dismiss after 5s
-  useEffect(() => {
-    if (!undo) return;
-    const t = setTimeout(() => setUndo(null), 5000);
-    return () => clearTimeout(t);
-  }, [undo]);
 
   return (
     <KeyboardAvoidingView
@@ -566,72 +572,6 @@ const TodosListScreen = (): JSX.Element => {
             </View>
           </View>
         </Modal>
-
-        {/* Undo snackbar */}
-        {undo && (
-          <View
-            style={[
-              styles.UndoSnackBar,
-              { borderColor: colors.border, backgroundColor: colors.card },
-            ]}
-            accessibilityLiveRegion="polite"
-          >
-            <Text style={{ color: colors.text }} numberOfLines={1}>
-              Deleted “{undo.todo.title}”
-            </Text>
-            <Pressable
-              onPress={undoDelete}
-              hitSlop={8}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-            >
-              <Text style={{ color: '#2563eb', fontWeight: '700' }}>UNDO</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Swipe hint */}
-        {showSwipeHint && (
-          <Pressable
-            onPress={markHintSeen}
-            style={styles.SwipeBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss swipe hint"
-          >
-            <View
-              style={[
-                styles.SwipeArea,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <Text style={[styles.SwipeText, { color: colors.text }]}>
-                Tip: Swipe a todo
-              </Text>
-              <Text style={{ color: colors.text, opacity: 0.8 }}>
-                Swipe <Text style={{ fontWeight: '700' }}>right</Text> to mark
-                done, or swipe <Text style={{ fontWeight: '700' }}>left</Text>{' '}
-                to delete.
-              </Text>
-              <Text style={{ marginTop: 12, color: colors.text, opacity: 0.7 }}>
-                Tap anywhere to dismiss.
-              </Text>
-            </View>
-          </Pressable>
-        )}
-
-        {/* DEV-ONLY: Reset Swipe Hint */}
-        {__DEV__ && (
-          <Pressable
-            onPress={async () => {
-              await AsyncStorage.removeItem('todos:swipeHintShown');
-              setShowSwipeHint(true); // pop it up immediately
-            }}
-            style={{ marginTop: 12 }}
-          >
-            <Text style={{ color: 'red', textAlign: 'center' }}>
-              🔄 Reset Swipe Hint
-            </Text>
-          </Pressable>
-        )}
       </View>
     </KeyboardAvoidingView>
   );
