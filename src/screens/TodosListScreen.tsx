@@ -158,6 +158,7 @@ const TodosListScreen = (): JSX.Element => {
   const [refreshing, setRefreshing] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
   const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const total = todos.length;
@@ -244,6 +245,15 @@ const TodosListScreen = (): JSX.Element => {
     refetch().finally(() => setRefreshing(false));
   };
 
+  const addBusy = (id: string): void =>
+    setBusyIds((s) => new Set(s).add(String(id)));
+  const removeBusy = (id: string): void =>
+    setBusyIds((s) => {
+      const next = new Set(s);
+      next.delete(String(id));
+      return next;
+    });
+
   // Undo helper
   const undoDeleteNow = (deleted: Todo, index: number): void => {
     const current = todosRef.current;
@@ -278,15 +288,14 @@ const TodosListScreen = (): JSX.Element => {
         message: (err as Error)?.message ?? 'Add failed',
       });
     },
-    onSuccess: () => {
-      enqueue({ kind: 'success', message: 'Todo added' });
-    },
+    onSuccess: () => enqueue({ kind: 'success', message: 'Todo added' }),
   });
 
   const toggleMut = useMutation({
     mutationFn: ({ id, next }: { id: string; next: boolean }) =>
       updateTodo(id, { done: next }),
     onMutate: async ({ id }) => {
+      addBusy(id);
       const prev = todosRef.current;
       dispatch({ type: 'toggle', id });
       return { prev };
@@ -298,12 +307,14 @@ const TodosListScreen = (): JSX.Element => {
         message: (err as Error)?.message ?? 'Update failed',
       });
     },
+    onSettled: (_data, _err, vars) => removeBusy(vars.id),
   });
 
   const editMut = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       updateTodo(id, { title }),
     onMutate: async ({ id, title }) => {
+      addBusy(id);
       const prev = todosRef.current;
       dispatch({
         type: 'edit',
@@ -319,14 +330,13 @@ const TodosListScreen = (): JSX.Element => {
         message: (err as Error)?.message ?? 'Save failed',
       });
     },
-    onSuccess: () => {
-      enqueue({ kind: 'success', message: 'Saved' });
-    },
+    onSuccess: () => enqueue({ kind: 'success', message: 'Saved' }),
   });
 
   const delMut = useMutation({
     mutationFn: (id: string) => deleteTodo(id),
     onMutate: async (id) => {
+      addBusy(id);
       const prev = todosRef.current;
       dispatch({ type: 'remove', id });
       return { prev };
@@ -338,9 +348,7 @@ const TodosListScreen = (): JSX.Element => {
         message: (err as Error)?.message ?? 'Delete failed',
       });
     },
-    onSuccess: () => {
-      enqueue({ kind: 'success', message: 'Deleted' });
-    },
+    onSuccess: () => enqueue({ kind: 'success', message: 'Deleted' }),
   });
 
   // Handlers using mutations
@@ -462,6 +470,8 @@ const TodosListScreen = (): JSX.Element => {
           <TodoForm
             mode="add"
             colors={colors as any}
+            loading={addMut.isPending}
+            submitLabel={addMut.isPending ? 'Adding…' : 'Add'}
             onSubmit={({ title }: TodoFormValues) => onAdd(title)}
           />
         </View>
@@ -528,6 +538,7 @@ const TodosListScreen = (): JSX.Element => {
             <TodoRow
               item={item}
               colors={colors as any}
+              busy={busyIds.has(item.id)}
               onToggle={handleToggle}
               onEdit={handleEdit}
               onDeleteRequest={handleDeleteRequest}

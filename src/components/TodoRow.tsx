@@ -69,11 +69,13 @@ export type TodoRowProps = {
   onEdit: (id: string, title: string) => void;
   setOpenRow?: (row: SwipeableMethods | null) => void;
   onDeleteRequest: (id: string, title: string) => void;
+  busy?: boolean;
 };
 
 const Row = ({
   item,
   colors,
+  busy,
   onEdit,
   onToggle,
   setOpenRow,
@@ -138,8 +140,12 @@ const Row = ({
         <Animated.View style={aStyle}>
           <Pressable
             delayLongPress={150}
-            onPress={() => onToggle(item.id, !item.done)}
-            onLongPress={() => onEdit(item.id, item.title)}
+            onPress={() => {
+              if (!busy) onToggle(item.id, !item.done);
+            }}
+            onLongPress={() => {
+              if (!busy) onEdit(item.id, item.title);
+            }}
             onPressOut={() => (scale.value = withSpring(1, { damping: 20 }))}
             onPressIn={() => (scale.value = withSpring(0.98, { damping: 20 }))}
             hitSlop={SPACING.sm}
@@ -153,6 +159,7 @@ const Row = ({
               {
                 borderColor: colors.border,
                 backgroundColor: item.done ? '#e5e7eb30' : 'transparent',
+                opacity: busy ? 0.55 : 1,
               },
             ]}
             accessibilityRole="button"

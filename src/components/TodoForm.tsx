@@ -27,8 +27,9 @@ type Props = {
   defaultValues?: Partial<TodoFormValues>;
   onSubmit: (values: TodoFormValues) => void;
   onCancel?: () => void;
-  // minimal color contract pulled from theme
   colors: { text: string; border: string; background?: string; card?: string };
+  loading?: boolean;
+  submitLabel?: string;
 };
 
 const styles = StyleSheet.create({
@@ -49,7 +50,15 @@ const styles = StyleSheet.create({
 });
 
 const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
-  { mode, defaultValues, onSubmit, onCancel, colors }: Props,
+  {
+    mode,
+    defaultValues,
+    onSubmit,
+    onCancel,
+    colors,
+    loading,
+    submitLabel,
+  }: Props,
   ref
 ) {
   const {
@@ -131,12 +140,12 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
           {onCancel && <Button title="Cancel" onPress={onCancel} />}
           {onCancel && <View style={{ width: 8 }} />}
           <Button
-            title={mode === 'add' ? 'Add' : 'Save'}
+            title={submitLabel ?? (mode === 'add' ? 'Add' : 'Save')}
             onPress={handleSubmit((vals) => {
               Keyboard.dismiss();
               onSubmit(vals);
             })}
-            disabled={!canSubmit || isSubmitting}
+            disabled={!canSubmit || loading}
           />
         </View>
       </View>
