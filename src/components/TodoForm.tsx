@@ -5,11 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   View,
   Text,
-  Button,
+  Pressable,
   Keyboard,
   Platform,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 
 const schema = z.object({
@@ -27,14 +28,21 @@ type Props = {
   defaultValues?: Partial<TodoFormValues>;
   onSubmit: (values: TodoFormValues) => void;
   onCancel?: () => void;
-  colors: { text: string; border: string; background?: string; card?: string };
   loading?: boolean;
   submitLabel?: string;
+  colors: {
+    text: string;
+    border: string;
+    background?: string;
+    card?: string;
+    primary?: string;
+  };
 };
 
 const styles = StyleSheet.create({
   field: { marginTop: 8 },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 12 },
+  error: { color: '#ef4444', marginTop: 6, fontSize: 13 },
   input: {
     height: 48,
     borderWidth: 1,
@@ -46,7 +54,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     paddingVertical: Platform.OS === 'android' ? 10 : 12,
   },
-  error: { color: '#ef4444', marginTop: 6, fontSize: 13 },
+  btn: {
+    minWidth: 96,
+    height: 40,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnText: {
+    fontWeight: '700',
+  },
+  btnGhost: {
+    height: 40,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+  },
 });
 
 const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
@@ -95,6 +121,14 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
   const titleValue = watch('title') ?? '';
   const canSubmit = titleValue.trim().length > 0 && !isSubmitting;
 
+  const handlePress = handleSubmit((vals) => {
+    Keyboard.dismiss();
+    onSubmit(vals);
+  });
+
+  const primaryBg = colors?.primary ?? '#2563eb';
+  const disabled = !canSubmit || !!loading;
+
   return (
     <>
       <View style={styles.field}>
@@ -137,16 +171,44 @@ const TodoForm = forwardRef<TextInput, Props>(function TodoForm(
             { justifyContent: onCancel ? 'flex-end' : 'flex-start' },
           ]}
         >
-          {onCancel && <Button title="Cancel" onPress={onCancel} />}
+          {onCancel && (
+            <Pressable
+              onPress={onCancel}
+              hitSlop={8}
+              style={[styles.btnGhost, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.text, fontWeight: '600' }}>
+                Cancel
+              </Text>
+            </Pressable>
+          )}
+
           {onCancel && <View style={{ width: 8 }} />}
-          <Button
-            title={submitLabel ?? (mode === 'add' ? 'Add' : 'Save')}
-            onPress={handleSubmit((vals) => {
-              Keyboard.dismiss();
-              onSubmit(vals);
-            })}
-            disabled={!canSubmit || loading}
-          />
+
+          <Pressable
+            onPress={disabled ? undefined : handlePress}
+            hitSlop={8}
+            android_ripple={
+              Platform.OS === 'android' ? { color: '#00000014' } : undefined
+            }
+            accessibilityRole="button"
+            accessibilityState={{ disabled }}
+            style={[
+              styles.btn,
+              {
+                backgroundColor: disabled ? '#9ca3af' : primaryBg,
+                opacity: loading ? 0.85 : 1,
+              },
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={[styles.btnText, { color: '#fff' }]}>
+                {submitLabel ?? (mode === 'add' ? 'Add' : 'Save')}
+              </Text>
+            )}
+          </Pressable>
         </View>
       </View>
     </>

@@ -579,6 +579,8 @@ const TodosListScreen = (): JSX.Element => {
                   setEditingId(null);
                   setEditingTitle('');
                 }}
+                loading={editMut.isPending}
+                submitLabel={editMut.isPending ? 'Saving...' : 'Save'}
               />
             </View>
           </View>
