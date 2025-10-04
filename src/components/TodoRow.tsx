@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '800',
   },
-  PressableStyles: {
+  RowPressable: {
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     height: ROW_HEIGHT,
     ...cardShadow,
   },
-  RenderLeftActionStyles: {
+  SwipeDoneBackground: {
     flex: 1,
     backgroundColor: '#16a34a',
     justifyContent: 'center',
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
   },
-  RenderRightActionStyles: {
+  SwipeDeleteBackground: {
     flex: 1,
     backgroundColor: '#ef4444',
     justifyContent: 'center',
@@ -91,7 +91,7 @@ const Row = ({
 
   const renderLeftActions = useCallback(
     (): JSX.Element => (
-      <View style={styles.RenderLeftActionStyles}>
+      <View style={styles.SwipeDoneBackground}>
         <Text style={styles.text}>Done</Text>
       </View>
     ),
@@ -100,7 +100,7 @@ const Row = ({
 
   const renderRightActions = useCallback(
     (): JSX.Element => (
-      <View style={styles.RenderRightActionStyles}>
+      <View style={styles.SwipeDeleteBackground}>
         <Text style={styles.text}>Delete</Text>
       </View>
     ),
@@ -127,13 +127,22 @@ const Row = ({
         }}
         onSwipeableWillClose={() => setOpenRow?.(null)}
         onSwipeableOpen={(dir: 'left' | 'right') => {
-          if (dir === 'right') {
-            onToggle(item.id, !item.done);
-            swipeRef.current?.close();
-          }
+          // Close first to avoid the action background sticking around on re-render
+          swipeRef.current?.close();
+
           if (dir === 'left') {
-            onDeleteRequest(item.id, item.title);
-            swipeRef.current?.close();
+            // Swiped right → left actions (Delete)
+            // Defer to next frame so it's not done mid-gesture
+            requestAnimationFrame(() => {
+              if (!busy) onDeleteRequest(item.id, item.title);
+            });
+          }
+
+          if (dir === 'right') {
+            // Swiped left → right actions (Done)
+            requestAnimationFrame(() => {
+              if (!busy) onToggle(item.id, !item.done);
+            });
           }
         }}
       >
@@ -155,7 +164,7 @@ const Row = ({
                 : undefined
             }
             style={[
-              styles.PressableStyles,
+              styles.RowPressable,
               {
                 borderColor: colors.border,
                 backgroundColor: item.done ? '#e5e7eb30' : 'transparent',

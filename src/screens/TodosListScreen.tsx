@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useIsFetching } from '@tanstack/react-query';
+import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import {
   useEffect,
   useReducer,
@@ -11,16 +12,13 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import {
   View,
   Text,
-  Alert,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
-  ActionSheetIOS,
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -35,12 +33,12 @@ import { useSnackbar } from '../providers/SnackbarProvider';
 
 import TodoRow from '../components/TodoRow';
 import EmptyState from '../components/EmptyState';
+import ConfirmDialog from '../components/ConfirmDialog';
 import TodoForm, { TodoFormValues } from '../components/TodoForm';
 
 import { FlashList, type ListRenderItemInfo } from '../libs/flashlist';
 
 import { fetchTodos, createTodo, updateTodo, deleteTodo } from '../api/todos';
-import { normalizeTodos } from '../utils/normalize';
 
 type Action =
   | { type: 'clearCompleted' }
@@ -117,28 +115,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
   },
-  SwipeBtn: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  SwipeArea: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    maxWidth: 360,
-  },
-  SwipeText: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
   modalTitle: { fontSize: 18, fontWeight: '700' },
 });
 
@@ -160,6 +136,21 @@ const TodosListScreen = (): JSX.Element => {
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{
+    visible: boolean;
+    id: string | null;
+    title: string;
+    index: number;
+    deleted?: Todo | null;
+    loading: boolean;
+  }>({
+    visible: false,
+    id: null,
+    title: '',
+    index: -1,
+    deleted: null,
+    loading: false,
+  });
 
   const total = todos.length;
   const completed = todos.filter((todo) => todo.done).length;
@@ -170,7 +161,7 @@ const TodosListScreen = (): JSX.Element => {
 
   const openRowRef = useRef<SwipeableMethods | null>(null);
 
-  const setOpenRow = (row: SwipeableMethods | null) => {
+  const setOpenRow = (row: SwipeableMethods | null): void => {
     if (openRowRef.current && openRowRef.current !== row) {
       try {
         openRowRef.current.close();
@@ -247,6 +238,7 @@ const TodosListScreen = (): JSX.Element => {
 
   const addBusy = (id: string): void =>
     setBusyIds((s) => new Set(s).add(String(id)));
+
   const removeBusy = (id: string): void =>
     setBusyIds((s) => {
       const next = new Set(s);
@@ -331,6 +323,7 @@ const TodosListScreen = (): JSX.Element => {
       });
     },
     onSuccess: () => enqueue({ kind: 'success', message: 'Saved' }),
+    onSettled: (_data, _err, vars) => removeBusy(vars.id),
   });
 
   const delMut = useMutation({
@@ -372,23 +365,6 @@ const TodosListScreen = (): JSX.Element => {
     );
   };
 
-  const onDelete = (id: string): void => {
-    if (delMut.isPending) return;
-    delMut.mutate(id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-      () => {}
-    );
-  };
-
-  // Derived + memoized
-  const filtered = useMemo(
-    () =>
-      todos.filter((todo) =>
-        filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
-      ),
-    [todos, filter]
-  );
-
   const handleToggle = useCallback((id: string, next: boolean): void => {
     onToggle(id, next);
   }, []);
@@ -415,46 +391,55 @@ const TodosListScreen = (): JSX.Element => {
   };
 
   const confirmDelete = (id: string, title: string): void => {
-    const doDelete = (): void => {
-      try {
-        openRowRef.current?.close();
-      } catch {}
-      // find in latest list
-      const idx = todosRef.current.findIndex(
-        (todo) => String(todo.id) === String(id)
-      );
-      const deleted = todosRef.current.find(
-        (todo) => String(todo.id) === String(id)
-      );
+    const idx = todosRef.current.findIndex((todo) => todo.id === id);
+    const deleted = todosRef.current.find((todo) => todo.id === id) ?? null;
 
-      onDelete(id);
-      if (idx >= 0 && deleted) {
+    setConfirm({
+      visible: true,
+      id,
+      title,
+      index: idx,
+      deleted,
+      loading: false,
+    });
+  };
+
+  const closeConfirm = (): void =>
+    setConfirm((c) => ({ ...c, visible: false, loading: false }));
+
+  const confirmDeleteNow = async (): Promise<void> => {
+    if (!confirm.id) return;
+    setConfirm((c) => ({ ...c, loading: true }));
+
+    try {
+      // optimistic remove already happens in delMut.onMutate
+      await delMut.mutateAsync(confirm.id);
+
+      // enqueue undo snackbar with captured deleted + index (if still available)
+      if (confirm.deleted && confirm.index >= 0) {
         enqueue({
           kind: 'info',
-          message: `Deleted “${deleted.title}”`,
+          message: `Deleted “${confirm.deleted.title}”`,
           actionLabel: 'UNDO',
           durationMs: 5000,
-          onAction: () => undoDeleteNow(deleted, idx),
+          onAction: () => undoDeleteNow(confirm.deleted!, confirm.index),
         });
       }
-    };
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: `Delete "${title}"?`,
-          options: ['Cancel', 'Delete'],
-          destructiveButtonIndex: 1,
-          cancelButtonIndex: 0,
-        },
-        (i) => i === 1 && doDelete()
-      );
-    } else {
-      Alert.alert('Delete?', `"${title}"`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: doDelete },
-      ]);
+      closeConfirm();
+    } catch (err) {
+      // onError in mutation will already revert state & show error snackbar
+      closeConfirm();
     }
   };
+
+  // Derived + memoized
+  const filtered = useMemo(
+    () =>
+      todos.filter((todo) =>
+        filter === 'all' ? true : filter === 'active' ? !todo.done : todo.done
+      ),
+    [todos, filter]
+  );
 
   return (
     <KeyboardAvoidingView
@@ -546,6 +531,19 @@ const TodosListScreen = (): JSX.Element => {
               onAnySwipeStart={markHintSeen}
             />
           )}
+        />
+
+        {/* Confirm dialog */}
+        <ConfirmDialog
+          visible={confirm.visible}
+          title={`Delete "${confirm.title}"?`}
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          loading={confirm.loading}
+          onConfirm={confirmDeleteNow}
+          onCancel={closeConfirm}
+          colors={colors as any}
         />
 
         {/* Edit modal */}
