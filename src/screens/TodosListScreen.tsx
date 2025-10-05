@@ -126,6 +126,7 @@ const TodosListScreen = (): JSX.Element => {
   const [todos, dispatch] = useReducer(reducer, []);
 
   const todosRef = useRef<Todo[]>(todos);
+
   useEffect(() => {
     todosRef.current = todos;
   }, [todos]);

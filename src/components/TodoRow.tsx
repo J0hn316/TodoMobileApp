@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback } from 'react';
+import { memo, useRef, useState, useCallback } from 'react';
 import type { JSX } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View, StyleSheet, Platform } from 'react-native';
@@ -82,12 +82,38 @@ const Row = ({
   onAnySwipeStart,
   onDeleteRequest,
 }: TodoRowProps): JSX.Element => {
+  const [nonce, setNonce] = useState(0);
   const swipeRef = useRef<SwipeableMethods | null>(null);
+  const pending = useRef<null | 'done' | 'delete'>(null);
 
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+
+  const handleOpen = useCallback((dir: 'left' | 'right'): void => {
+    // record intent, then close (we'll act on close)
+    pending.current = dir === 'right' ? 'done' : 'delete'; // sets new intent
+    swipeRef.current?.close();
+  }, []);
+
+  const handleClose = useCallback((): void => {
+    setOpenRow?.(null);
+
+    // snapshot & clear the intent
+    const action = pending.current;
+    pending.current = null;
+
+    // wait one frame so the close animation fully unmounts the action view
+    requestAnimationFrame(() => {
+      // optional: force a lightweight remount to clear any stale visuals
+      setNonce((n) => (n + 1) % 1000);
+
+      if (!action || busy) return; // no intent or row is busy => do nothing
+      if (action === 'done') onToggle(item.id, !item.done);
+      else onDeleteRequest(item.id, item.title);
+    });
+  }, [busy, item.id, item.done, onDeleteRequest, onToggle, setOpenRow]);
 
   const renderLeftActions = useCallback(
     (): JSX.Element => (
@@ -114,6 +140,7 @@ const Row = ({
       layout={LinearTransition.springify().damping(16)}
     >
       <ReanimatedSwipeable
+        key={`${item.id}:${item.done ? '1' : '0'}:${nonce}`}
         ref={swipeRef}
         renderLeftActions={renderLeftActions}
         renderRightActions={renderRightActions}
@@ -125,26 +152,8 @@ const Row = ({
           setOpenRow?.(swipeRef.current);
           onAnySwipeStart?.();
         }}
-        onSwipeableWillClose={() => setOpenRow?.(null)}
-        onSwipeableOpen={(dir: 'left' | 'right') => {
-          // Close first to avoid the action background sticking around on re-render
-          swipeRef.current?.close();
-
-          if (dir === 'left') {
-            // Swiped right → left actions (Delete)
-            // Defer to next frame so it's not done mid-gesture
-            requestAnimationFrame(() => {
-              if (!busy) onDeleteRequest(item.id, item.title);
-            });
-          }
-
-          if (dir === 'right') {
-            // Swiped left → right actions (Done)
-            requestAnimationFrame(() => {
-              if (!busy) onToggle(item.id, !item.done);
-            });
-          }
-        }}
+        onSwipeableOpen={handleOpen}
+        onSwipeableWillClose={handleClose}
       >
         <Animated.View style={aStyle}>
           <Pressable
@@ -184,6 +193,7 @@ const Row = ({
               { name: 'magicTap', label: 'Delete' },
             ]}
             onAccessibilityAction={({ nativeEvent }) => {
+              if (busy) return;
               if (nativeEvent.actionName === 'activate')
                 onToggle(item.id, !item.done);
               if (nativeEvent.actionName === 'longpress')
