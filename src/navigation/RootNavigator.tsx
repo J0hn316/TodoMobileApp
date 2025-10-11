@@ -31,6 +31,7 @@ const MainTabs = (): JSX.Element => {
       const onBack = () => {
         // if Tabs is focused and we're on the first tab, exit app
         const state = navigation.getState();
+
         const tabIndex = state?.routes?.find((r) => r.name === 'MainTabs')
           ? state.index
           : 0;
@@ -53,6 +54,7 @@ const MainTabs = (): JSX.Element => {
         tabBarLabel: route.name,
         tabBarIcon: ({ color, size, focused }) => {
           let name: keyof typeof Ionicons.glyphMap = 'home';
+
           // pick an icon based on the route
           if (route.name === 'Home') name = focused ? 'home' : 'home-outline';
           if (route.name === 'Settings')

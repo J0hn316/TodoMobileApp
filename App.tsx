@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import 'react-native-gesture-handler';
 import 'react-native-get-random-values';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,7 +10,7 @@ import { SnackbarProvider } from './src/providers/SnackbarProvider';
 
 const queryClient = new QueryClient();
 
-const App = () => {
+const App = (): JSX.Element => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>

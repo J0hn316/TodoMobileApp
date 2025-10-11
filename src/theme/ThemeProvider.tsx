@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useColorScheme as useDeviceScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
@@ -19,13 +20,17 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = 'theme:mode';
 
-export const useAppTheme = () => {
+export const useAppTheme = (): ThemeContextValue => {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error('useAppTheme must be used within ThemeProvider');
   return ctx;
 };
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+export const ThemeProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element => {
   const device = useDeviceScheme();
   const [mode, setMode] = useState<ThemeMode>(
     device === 'dark' ? 'dark' : 'light'
@@ -48,7 +53,8 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     () => (mode === 'dark' ? NavDarkTheme : NavLightTheme),
     [mode]
   );
-  const value = useMemo(
+
+  const theme = useMemo(
     () => ({
       mode,
       toggle: () => setMode((m) => (m === 'light' ? 'dark' : 'light')),
@@ -58,6 +64,6 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>
   );
 };
