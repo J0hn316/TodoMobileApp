@@ -10,8 +10,8 @@ const EmptyState = ({ color }: { color: string }): JSX.Element => {
       <Text style={{ color, fontWeight: '700', fontSize: 16, marginBottom: 6 }}>
         Nothing here yet
       </Text>
-      <Text style={{ color, opacity: 0.7, textAlign: 'center' }}>
-        Add a new todo above, or change the filter.
+      <Text style={{ color, opacity: 0.75, textAlign: 'center', marginTop: 6 }}>
+        Pull down to refresh, or change the filter.
       </Text>
     </View>
   );

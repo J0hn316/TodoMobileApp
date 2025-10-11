@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { SPACING } from '../theme/layout';
 const schema = z.object({
   title: z
     .string()
@@ -41,8 +42,13 @@ type Props = {
 
 const styles = StyleSheet.create({
   field: { marginTop: 8 },
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 12 },
-  error: { color: '#ef4444', marginTop: 6, fontSize: 13 },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
+  error: { color: '#ef4444', marginTop: SPACING.xs, fontSize: 13 },
   input: {
     height: 48,
     borderWidth: 1,

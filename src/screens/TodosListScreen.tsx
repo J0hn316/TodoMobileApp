@@ -17,14 +17,14 @@ import {
   Text,
   Modal,
   Platform,
-  Pressable,
   StyleSheet,
-  ActivityIndicator,
+  AccessibilityInfo,
   KeyboardAvoidingView,
 } from 'react-native';
 
 import { generateId } from '../utils/id';
 
+import { SPACING } from '../theme/layout';
 import applyRowLayout from '../theme/rowLayout';
 
 import type { Todo } from '../types/models';
@@ -32,7 +32,9 @@ import type { Todo } from '../types/models';
 import { useSnackbar } from '../providers/SnackbarProvider';
 
 import TodoRow from '../components/TodoRow';
+import CountsBar from '../components/CountsBar';
 import EmptyState from '../components/EmptyState';
+import FilterChip from '../components/FilterChip';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TodoForm, { TodoFormValues } from '../components/TodoForm';
 
@@ -85,15 +87,25 @@ const reducer = (state: Todo[], action: Action): Todo[] => {
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: 16 },
   title: { fontSize: 22, fontWeight: '700' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  list: { marginTop: 12 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: SPACING.md,
+  },
+  list: { marginTop: SPACING.md },
   countAndSpinner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginTop: 8,
   },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  filters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: SPACING.md,
+  },
   filterBtn: {
     borderWidth: 1,
     borderRadius: 999,
@@ -206,10 +218,14 @@ const TodosListScreen = (): JSX.Element => {
   };
 
   // Remote fetch + hydrate (first time) with React Query
-  const { data, refetch, isSuccess } = useQuery({
+  const { data, refetch, isSuccess, dataUpdatedAt } = useQuery({
     queryKey: ['todos'],
     queryFn: fetchTodos,
   });
+
+  const lastUpdated = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString()
+    : null;
 
   // when remote data arrives the first time AND local list is empty, hydrate reducer
   useEffect(() => {
@@ -442,6 +458,12 @@ const TodosListScreen = (): JSX.Element => {
     [todos, filter]
   );
 
+  useEffect(() => {
+    if (editingId) {
+      AccessibilityInfo.announceForAccessibility?.('Edit todo');
+    }
+  }, [editingId]);
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -452,7 +474,7 @@ const TodosListScreen = (): JSX.Element => {
         <Text style={[styles.title, { color: colors.text }]}>📝 Todos</Text>
 
         {/* Add row */}
-        <View style={{ marginTop: 12 }}>
+        <View style={{ marginTop: SPACING.md }}>
           <TodoForm
             mode="add"
             colors={colors as any}
@@ -464,51 +486,44 @@ const TodosListScreen = (): JSX.Element => {
 
         {/* Filters */}
         <View style={styles.filters}>
-          {(['all', 'active', 'completed'] as Filter[]).map((f) => {
-            const active = filter === f;
-            return (
-              <Pressable
-                key={f}
-                onPress={() => {
-                  setFilter(f);
-                  Haptics.selectionAsync().catch(() => {});
-                }}
-                style={[
-                  styles.filterBtn,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: active
-                      ? colors.primary ?? '#2563eb'
-                      : 'transparent',
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: active ? '#fff' : colors.text,
-                    fontWeight: active ? '700' : '500',
-                  }}
-                >
-                  {f[0].toUpperCase() + f.slice(1)}
-                </Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
+          {(['all', 'active', 'completed'] as Filter[]).map((f) => (
+            <FilterChip
+              key={f}
+              label={f[0].toUpperCase() + f.slice(1)}
+              selected={filter === f}
+              onPress={() => {
+                setFilter(f);
+                Haptics.selectionAsync().catch(() => {});
+              }}
+              borderColor={colors.border}
+              selectedBg={(colors as any).primary ?? '#2563eb'}
+              textColor={colors.text}
+            />
+          ))}
+          <FilterChip
+            key="clear"
+            label="Clear Completed"
+            selected={false}
             onPress={() => dispatch({ type: 'clearCompleted' })}
-            style={[styles.filterBtn, { borderColor: colors.border }]}
-          >
-            <Text style={{ color: colors.text }}>Clear Completed</Text>
-          </Pressable>
+            borderColor={colors.border}
+            textColor={colors.text}
+          />
         </View>
 
         {/* Counts + spinner */}
-        <View style={styles.countAndSpinner}>
-          <Text style={{ color: colors.text, opacity: 0.8 }}>
-            {active} active • {completed} completed • {total} total
+        <CountsBar
+          active={active}
+          completed={completed}
+          total={total}
+          colors={colors as any}
+          isFetchingAny={isFetchingAny}
+        />
+
+        {lastUpdated ? (
+          <Text style={{ marginTop: 4, color: colors.text, opacity: 0.6 }}>
+            Last updated at {lastUpdated}
           </Text>
-          {isFetchingAny ? <ActivityIndicator /> : null}
-        </View>
+        ) : null}
 
         {/* List */}
         <FlashList
