@@ -8,7 +8,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "fix": "expo install --fix",
-    "doctor": "npx expo-doctor"
+    "doctor": "npx expo-doctor",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -38,8 +40,10 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@types/node": "^24.7.2",
     "@types/react": "^19.1.14",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
   },
   "private": true
 }

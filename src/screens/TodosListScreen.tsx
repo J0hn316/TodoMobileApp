@@ -29,6 +29,8 @@ import applyRowLayout from '../theme/rowLayout';
 
 import type { Todo } from '../types/models';
 
+import { reducer, STORAGE_KEY } from '../reducers/todosReducer';
+
 import { useSnackbar } from '../providers/SnackbarProvider';
 
 import TodoRow from '../components/TodoRow';
@@ -42,47 +44,7 @@ import { FlashList, type ListRenderItemInfo } from '../libs/flashlist';
 
 import { fetchTodos, createTodo, updateTodo, deleteTodo } from '../api/todos';
 
-type Action =
-  | { type: 'clearCompleted' }
-  | { type: 'add'; title: string }
-  | { type: 'toggle'; id: string }
-  | { type: 'remove'; id: string }
-  | { type: 'hydrate'; todos: Todo[] }
-  | { type: 'edit'; id: string; title: string };
-
 type Filter = 'all' | 'active' | 'completed';
-
-const STORAGE_KEY = 'todos:v1';
-
-const reducer = (state: Todo[], action: Action): Todo[] => {
-  switch (action.type) {
-    case 'hydrate':
-      return action.todos;
-    case 'add': {
-      const title = action.title.trim();
-      if (!title) return state;
-      return [
-        { id: generateId(), title, done: false, createdAt: Date.now() },
-        ...state,
-      ];
-    }
-    case 'toggle':
-      return state.map((t) =>
-        t.id === action.id ? { ...t, done: !t.done } : t
-      );
-    case 'remove':
-      return state.filter((t) => t.id !== action.id);
-    case 'edit': {
-      const title = action.title.trim();
-      if (!title) return state;
-      return state.map((t) => (t.id === action.id ? { ...t, title } : t));
-    }
-    case 'clearCompleted':
-      return state.filter((t) => !t.done);
-    default:
-      return state;
-  }
-};
 
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: 16 },
