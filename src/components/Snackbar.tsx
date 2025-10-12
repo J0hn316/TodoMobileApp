@@ -2,11 +2,11 @@ import type { JSX } from 'react';
 import { useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
-type Kind = 'info' | 'success' | 'error';
+type MsgType = 'info' | 'success' | 'warning' | 'error';
 
 export type SnackbarItem = {
   id: string;
-  kind: Kind;
+  type: MsgType;
   message: string;
   actionLabel?: string;
   onAction?: () => void;
@@ -40,7 +40,7 @@ const Snackbar = ({
   item: SnackbarItem;
   onClose: () => void;
 }): JSX.Element => {
-  const { kind, message, actionLabel, onAction, durationMs = 3000 } = item;
+  const { type, message, actionLabel, onAction, durationMs = 3000 } = item;
 
   useEffect(() => {
     const time = setTimeout(onClose, durationMs);
@@ -48,11 +48,11 @@ const Snackbar = ({
   }, [durationMs, onClose]);
 
   const bg =
-    kind === 'error' ? '#fee2e2' : kind === 'success' ? '#dcfce7' : '#e5e7eb';
+    type === 'error' ? '#fee2e2' : type === 'success' ? '#dcfce7' : '#e5e7eb';
   const fg =
-    kind === 'error' ? '#991b1b' : kind === 'success' ? '#166534' : '#111827';
+    type === 'error' ? '#991b1b' : type === 'success' ? '#166534' : '#111827';
   const border =
-    kind === 'error' ? '#fecaca' : kind === 'success' ? '#bbf7d0' : '#d1d5db';
+    type === 'error' ? '#fecaca' : type === 'success' ? '#bbf7d0' : '#d1d5db';
 
   return (
     <View style={[styles.wrap]}>

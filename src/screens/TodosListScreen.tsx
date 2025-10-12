@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 
 import { generateId } from '../utils/id';
+import { OfflineQueue } from '../utils/offlineQueue';
 
 import { SPACING } from '../theme/layout';
 import applyRowLayout from '../theme/rowLayout';
@@ -250,16 +251,18 @@ const TodosListScreen = (): JSX.Element => {
       };
       const prev = todosRef.current;
       dispatch({ type: 'hydrate', todos: [optimistic, ...prev] });
-      return { prev };
+      return { prev, optimisticId: optimistic.id };
     },
-    onError: (err, _vars, ctx) => {
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      enqueue({
-        kind: 'error',
-        message: (err as Error)?.message ?? 'Add failed',
+    onError: async (err, title, ctx) => {
+      // Instead of rollback, keep the optimistic row and queue the server action
+      await OfflineQueue.enqueue({
+        type: 'add',
+        title,
+        clientId: ctx?.optimisticId ?? generateId(),
       });
+      enqueue({ type: 'warning', message: 'Offline: will sync when online' });
     },
-    onSuccess: () => enqueue({ kind: 'success', message: 'Todo added' }),
+    onSuccess: () => enqueue({ type: 'success', message: 'Todo added' }),
   });
 
   const toggleMut = useMutation({
@@ -269,14 +272,16 @@ const TodosListScreen = (): JSX.Element => {
       addBusy(id);
       const prev = todosRef.current;
       dispatch({ type: 'toggle', id });
-      return { prev };
+      return { prev, id };
     },
-    onError: (err, _vars, ctx) => {
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      enqueue({
-        kind: 'error',
-        message: (err as Error)?.message ?? 'Update failed',
+    onError: async (err, vars, ctx) => {
+      // Keep the optimistic state; queue the change
+      await OfflineQueue.enqueue({
+        type: 'toggle',
+        id: ctx?.id ?? vars.id,
+        next: vars.next,
       });
+      enqueue({ type: 'warning', message: 'Offline: change queued' });
     },
     onSettled: (_data, _err, vars) => removeBusy(vars.id),
   });
@@ -292,16 +297,17 @@ const TodosListScreen = (): JSX.Element => {
         id,
         title,
       });
-      return { prev };
+      return { prev, id, title };
     },
-    onError: (err, _vars, ctx) => {
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      enqueue({
-        kind: 'error',
-        message: (err as Error)?.message ?? 'Save failed',
+    onError: async (err, vars, ctx) => {
+      await OfflineQueue.enqueue({
+        type: 'edit',
+        id: ctx?.id ?? vars.id,
+        title: ctx?.title ?? vars.title,
       });
+      enqueue({ type: 'warning', message: 'Offline: change queued' });
     },
-    onSuccess: () => enqueue({ kind: 'success', message: 'Saved' }),
+    onSuccess: () => enqueue({ type: 'success', message: 'Saved' }),
     onSettled: (_data, _err, vars) => removeBusy(vars.id),
   });
 
@@ -311,16 +317,13 @@ const TodosListScreen = (): JSX.Element => {
       addBusy(id);
       const prev = todosRef.current;
       dispatch({ type: 'remove', id });
-      return { prev };
+      return { prev, id };
     },
-    onError: (err, _vars, ctx) => {
-      ctx?.prev && dispatch({ type: 'hydrate', todos: ctx.prev });
-      enqueue({
-        kind: 'error',
-        message: (err as Error)?.message ?? 'Delete failed',
-      });
+    onError: async (err, id, ctx) => {
+      await OfflineQueue.enqueue({ type: 'delete', id: ctx?.id ?? id });
+      enqueue({ type: 'warning', message: 'Offline: deletion queued' });
     },
-    onSuccess: () => enqueue({ kind: 'success', message: 'Deleted' }),
+    onSuccess: () => enqueue({ type: 'success', message: 'Deleted' }),
   });
 
   // Handlers using mutations
@@ -397,7 +400,7 @@ const TodosListScreen = (): JSX.Element => {
       // enqueue undo snackbar with captured deleted + index (if still available)
       if (confirm.deleted && confirm.index >= 0) {
         enqueue({
-          kind: 'info',
+          type: 'info',
           message: `Deleted “${confirm.deleted.title}”`,
           actionLabel: 'UNDO',
           durationMs: 5000,
