@@ -14,7 +14,7 @@ export const STORAGE_KEY = 'todos:v1';
 export const reducer = (state: Todo[], action: Action): Todo[] => {
   switch (action.type) {
     case 'hydrate':
-      return action.todos;
+      return [...action.todos];
 
     case 'add': {
       const title = action.title.trim();

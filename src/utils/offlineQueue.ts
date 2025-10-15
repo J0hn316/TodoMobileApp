@@ -176,7 +176,14 @@ const subscribe = (fn: Listener) => {
   return () => listeners.delete(fn);
 };
 
+/**
+ * Test/diagnostics helper: return a shallow copy of the queue.
+ * Safe for production (read-only).
+ */
+const peek = () => queue.slice();
+
 export const OfflineQueue = {
+  peek,
   load,
   clear,
   enqueue,

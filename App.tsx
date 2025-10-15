@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useEffect } from 'react';
 import 'react-native-gesture-handler';
 import 'react-native-get-random-values';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -25,7 +26,7 @@ const AppRoot = (): JSX.Element => {
   return (
     <>
       <RootNavigator />
-      <OnlineListener />
+      <OnlineListener position="top" offset={16} />
     </>
   );
 };
@@ -33,13 +34,15 @@ const AppRoot = (): JSX.Element => {
 const App = (): JSX.Element => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <SnackbarProvider>
-            <AppRoot />
-          </SnackbarProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <SnackbarProvider>
+              <AppRoot />
+            </SnackbarProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 };
